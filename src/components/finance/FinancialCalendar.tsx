@@ -16,8 +16,19 @@ const colors: Record<string, string> = {
 };
 
 export function FinancialCalendar({ records }: { records: FinanceRecord[] }) {
-  const events = records
-    .filter((record) => !record.cancelled && ["income", "expense", "subscription", "loan", "goal"].includes(record.kind))
+  const loanEvents = records
+    .filter((record) => record.kind === "loan" && record.schedule?.length)
+    .flatMap((loan) =>
+      loan.schedule!.filter((row) => !row.paid).map((row) => ({
+        id: `${loan.id}-${row.n}`,
+        title: `${loan.name} · cuota ${row.n}`,
+        date: row.date,
+        backgroundColor: colors.loan,
+        borderColor: colors.loan,
+      })),
+    );
+  const events = [...loanEvents, ...records
+    .filter((record) => !record.cancelled && !(record.kind === "loan" && record.schedule?.length) && ["income", "expense", "subscription", "loan", "goal"].includes(record.kind))
     .map((record) => ({
       id: record.id,
       title: record.name,
@@ -26,7 +37,7 @@ export function FinancialCalendar({ records }: { records: FinanceRecord[] }) {
         : record.date,
       backgroundColor: colors[record.kind],
       borderColor: colors[record.kind],
-    }));
+    }))];
 
   return (
     <div className="calendar-shell">

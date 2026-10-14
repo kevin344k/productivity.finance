@@ -23,6 +23,7 @@ import {
   Goal,
   LayoutDashboard,
   Lightbulb,
+  StickyNote,
   Menu,
   MoreHorizontal,
   Plus,
@@ -42,10 +43,25 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BalanceChart } from "@/components/finance/BalanceChart";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AuthScreen, type SessionUser } from "@/components/AuthScreen";
 import { BrandLogo } from "@/components/finance/BrandLogo";
 import { useFinanceStore } from "@/features/finance/store";
 import { currency, formatDate, localDateString, nextChargeDate } from "@/lib/format";
 import type { FinanceBackup, FinanceRecord, RecordKind } from "@/types/finance";
+
+const NotesModule = dynamic(
+  () => import("@/components/finance/NotesModule").then((mod) => mod.NotesModule),
+  { ssr: false, loading: () => <div className="calendar-loading">Cargando notas...</div> },
+);
+
+const LoansModule = dynamic(
+  () => import("@/components/finance/LoansModule").then((mod) => mod.LoansModule),
+  { ssr: false, loading: () => <div className="calendar-loading">Cargando préstamos...</div> },
+);
+const LoanDialog = dynamic(
+  () => import("@/components/finance/LoanDialog").then((mod) => mod.LoanDialog),
+  { ssr: false },
+);
 
 const FinancialCalendar = dynamic(
   () => import("@/components/finance/FinancialCalendar").then((mod) => mod.FinancialCalendar),
@@ -54,13 +70,14 @@ const FinancialCalendar = dynamic(
 
 const ALERT_DAYS = 3;
 
-type PageKey = "overview" | "activity" | "subscriptions" | "loans" | "goals" | "calendar" | "reports" | "net-worth" | "assistant";
+type PageKey = "overview" | "activity" | "subscriptions" | "loans" | "notes" | "goals" | "calendar" | "reports" | "net-worth" | "assistant";
 
 const navigation: { key: PageKey; label: string; icon: LucideIcon; group: string }[] = [
   { key: "overview", label: "Resumen", icon: LayoutDashboard, group: "PRINCIPAL" },
   { key: "activity", label: "Movimientos", icon: ArrowLeftRight, group: "PRINCIPAL" },
   { key: "subscriptions", label: "Suscripciones", icon: CreditCard, group: "PLANIFICACIÓN" },
   { key: "loans", label: "Préstamos", icon: Activity, group: "PLANIFICACIÓN" },
+  { key: "notes", label: "Notas", icon: StickyNote, group: "PLANIFICACIÓN" },
   { key: "goals", label: "Metas", icon: Goal, group: "PLANIFICACIÓN" },
   { key: "calendar", label: "Calendario", icon: CalendarDays, group: "PLANIFICACIÓN" },
   { key: "reports", label: "Informes", icon: FileText, group: "ANÁLISIS" },
@@ -76,6 +93,7 @@ const kindLabel: Record<RecordKind, string> = {
   goal: "Meta",
   asset: "Activo",
   liability: "Pasivo",
+  note: "Nota",
 };
 
 const kindColor: Record<RecordKind, string> = {
@@ -86,6 +104,7 @@ const kindColor: Record<RecordKind, string> = {
   goal: "purple",
   asset: "green",
   liability: "red",
+  note: "purple",
 };
 
 const defaultCategory: Record<RecordKind, string> = {
@@ -96,10 +115,11 @@ const defaultCategory: Record<RecordKind, string> = {
   goal: "Ahorro",
   asset: "Efectivo",
   liability: "Otros pasivos",
+  note: "Nota",
 };
 
 const recordSchema = z.object({
-  kind: z.enum(["income", "expense", "subscription", "loan", "goal", "asset", "liability"]),
+  kind: z.enum(["income", "expense", "subscription", "loan", "goal", "asset", "liability", "note"]),
   name: z.string().trim().min(2, "Escribe al menos 2 caracteres"),
   category: z.string().trim().min(1, "Selecciona una categoría"),
   amount: z.coerce.number().positive("El monto debe ser mayor que cero"),
@@ -114,10 +134,10 @@ const recordSchema = z.object({
 
 const backupRecordSchema = z.object({
   id: z.string().min(1),
-  kind: z.enum(["income", "expense", "subscription", "loan", "goal", "asset", "liability"]),
+  kind: z.enum(["income", "expense", "subscription", "loan", "goal", "asset", "liability", "note"]),
   name: z.string().trim().min(1),
   category: z.string().trim().min(1),
-  amount: z.number().finite().positive(),
+  amount: z.number().finite().min(0),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   description: z.string().optional(),
   dueDay: z.number().int().min(1).max(31).optional(),
@@ -125,6 +145,29 @@ const backupRecordSchema = z.object({
   interestRate: z.number().finite().min(0).max(100).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   cancelled: z.boolean().optional(),
+  color: z.string().optional(),
+  body: z.string().optional(),
+  items: z.array(z.object({
+    id: z.string(),
+    text: z.string(),
+    done: z.boolean(),
+    due: z.string().optional(),
+    budget: z.number().finite().optional(),
+  })).optional(),
+  lender: z.string().optional(),
+  loanType: z.enum(["french", "german", "custom"]).optional(),
+  principalAmount: z.number().finite().optional(),
+  termMonths: z.number().int().optional(),
+  schedule: z.array(z.object({
+    n: z.number().int(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    payment: z.number().finite(),
+    principal: z.number().finite(),
+    interest: z.number().finite(),
+    fees: z.number().finite(),
+    balance: z.number().finite(),
+    paid: z.boolean().optional(),
+  })).optional(),
 });
 
 const backupSchema = z.object({
@@ -210,7 +253,7 @@ function RecordDialog({
         <form className="record-form" onSubmit={handleSubmit(submit)}>
           <label className="field-label">Tipo de registro
             <select {...register("kind")}>
-              {Object.entries(kindLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {Object.entries(kindLabel).filter(([value]) => value !== "note").map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
           <label className="field-label">Nombre
@@ -323,10 +366,35 @@ function MovementRow({
 }
 
 export default function Home() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [checking, setChecking] = useState(true);
+  const reset = useFinanceStore((state) => state.reset);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((me) => setUser(me))
+      .catch(() => setUser(null))
+      .finally(() => setChecking(false));
+  }, []);
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    reset();
+    setUser(null);
+  };
+
+  if (checking) return <div className="loading-state"><div className="loading-orbit" /></div>;
+  if (!user) return <AuthScreen onAuthenticated={setUser} />;
+  return <Dashboard key={user.id} user={user} onLogout={logout} />;
+}
+
+function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const { records, hydrated, hydrate, addRecord, removeRecord, replaceRecords } = useFinanceStore();
   const [activePage, setActivePage] = useState<PageKey>("overview");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null);
+  const [loanDialog, setLoanDialog] = useState<{ loan: FinanceRecord | null } | null>(null);
   const [transactionFilter, setTransactionFilter] = useState<"all" | "income" | "expense">("all");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
@@ -420,9 +488,17 @@ export default function Home() {
     },
   ];
   const todayStart = new Date(`${localDateString()}T00:00:00`).getTime();
-  const dueAlerts = subscriptions
-    .map((record) => {
-      const next = nextChargeDate(record.dueDay, record.date);
+  const loanCharges = loans.flatMap((loan) => {
+    const installment = loan.schedule?.find((row) => !row.paid);
+    return installment
+      ? [{ record: { ...loan, name: `${loan.name} · cuota ${installment.n}`, amount: installment.payment }, next: installment.date }]
+      : [];
+  });
+  const dueAlerts = [
+    ...subscriptions.map((record) => ({ record, next: nextChargeDate(record.dueDay, record.date) })),
+    ...loanCharges,
+  ]
+    .map(({ record, next }) => {
       const days = Math.round((new Date(`${next}T00:00:00`).getTime() - todayStart) / 86400000);
       return { record, next, days };
     })
@@ -483,7 +559,7 @@ export default function Home() {
     const first = dueAlerts[0];
     const message = dueAlerts.length === 1
       ? `${first.record.name} se cobra ${dueLabel(first.days)} (${currency(first.record.amount)})`
-      : `${dueAlerts.length} suscripciones se cobran en los próximos ${ALERT_DAYS} días`;
+      : `${dueAlerts.length} pagos vencen en los próximos ${ALERT_DAYS} días`;
     announce(message);
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
       new Notification("MoneyPilot AI · Cobro próximo", { body: message, icon: "/icon.svg" });
@@ -504,6 +580,11 @@ export default function Home() {
   };
 
   const handleDelete = async (id: string) => {
+    // Al borrar un préstamo también se eliminan los gastos generados por sus cuotas pagadas.
+    const loan = records.find((record) => record.id === id && record.kind === "loan");
+    if (loan?.schedule) {
+      for (const row of loan.schedule) if (row.paid) await removeRecord(`loanpay-${id}-${row.n}`);
+    }
     await removeRecord(id);
     announce("Registro eliminado");
   };
@@ -553,7 +634,7 @@ export default function Home() {
         <div className="sidebar-bottom">
           <div className="privacy-card">
             <div className="privacy-icon"><ShieldCheck size={17} /></div>
-            <div><strong>Solo en tu dispositivo</strong><span>Tus datos son privados y seguros.</span></div>
+            <div><strong>Cuenta privada</strong><span>Tus datos son solo tuyos.</span></div>
           </div>
           <button className="nav-item" onClick={exportBackup}><Download size={17} /><span>Exportar datos</span></button>
           <button className="nav-item" onClick={() => importRef.current?.click()}><Settings2 size={17} /><span>Importar respaldo</span></button>
@@ -575,7 +656,7 @@ export default function Home() {
             <label className="search-box"><Search size={16} /><input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Buscar..." aria-label="Buscar movimientos" /><kbd>⌘ K</kbd></label>
             <ThemeToggle />
             <button className="icon-button notification-button" aria-label={dueAlerts.length ? `${dueAlerts.length} cobros próximos` : "Notificaciones"} onClick={() => changePage("subscriptions")}><Bell size={17} />{dueAlerts.length > 0 && <i />}</button>
-            <button className="topbar-avatar" aria-label="Perfil">MP</button>
+            <button className="topbar-avatar" aria-label={`Cerrar sesión de ${user.name}`} title={`${user.name} · Cerrar sesión`} onClick={onLogout}>{user.name.slice(0, 2).toUpperCase()}</button>
           </div>
         </header>
         <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={(event) => void importBackup(event.target.files?.[0])} />
@@ -666,15 +747,13 @@ export default function Home() {
               )}
 
               {activePage === "loans" && (
-                <ModulePage title="Préstamos" subtitle="Sigue el progreso y planifica tu libertad financiera." actionLabel="Añadir préstamo" onAction={openNewRecord}>
-                  <div className="metrics-grid three"><MetricCard label="Deuda pendiente" value={currency(liabilities)} delta="saldo actual" icon={CreditCard} tone="red" /><MetricCard label="Préstamos activos" value={String(loans.length)} delta="registrados" icon={CalendarDays} tone="blue" /><MetricCard label="Nivel de deuda" value={debtLevel} delta="pasivos / activos" icon={Activity} tone="green" /></div>
-                  <div className="panel module-panel"><div className="section-head"><div><h2>Tus préstamos</h2><p>Progreso de pago y saldo pendiente</p></div></div>{loans.length ? loans.map((loan) => {
-                    const total = loan.targetAmount ?? loan.amount;
-                    const paid = Math.max(total - loan.amount, 0);
-                    const percent = Math.min((paid / total) * 100, 100);
-                    return <div className="loan-row" key={loan.id}><div className="loan-title"><div className="movement-icon blue"><CreditCard size={17} /></div><div><strong>{loan.name}</strong><span>{loan.category} · {loan.interestRate ?? 0}% interés</span></div><button className="delete-record" onClick={() => openEditRecord(loan)} aria-label={`Editar ${loan.name}`}><Edit2 size={13} /></button><button className="delete-record" onClick={() => void handleDelete(loan.id)} aria-label={`Eliminar ${loan.name}`}><X size={14} /></button></div><div className="loan-numbers"><span>Pagado <strong>{currency(paid)}</strong></span><span>Pendiente <strong>{currency(loan.amount)}</strong></span></div><div className="progress-track loan-progress"><span className="progress-fill blue" style={{ width: `${percent}%` }} /></div><span className="loan-percent">{Math.round(percent)}% completado · {loan.endDate ? `Proyección ${formatDate(loan.endDate)}` : "Sin fecha de liquidación"}</span></div>;
-                  }) : <EmptyState text="Añade tu primer préstamo para ver su progreso." />}</div>
+                <ModulePage title="Préstamos" subtitle="Cuotas reales de tu banco, capital e interés mes a mes." actionLabel="Añadir préstamo" onAction={() => setLoanDialog({ loan: null })}>
+                  <LoansModule loans={loans} onSave={addRecord} onRemove={removeRecord} onEdit={(loan) => setLoanDialog({ loan })} onDelete={(id) => void handleDelete(id)} monthlyIncome={incomes} monthlySubscriptions={monthlySubscriptions} />
                 </ModulePage>
+              )}
+
+              {activePage === "notes" && (
+                <NotesModule notes={records.filter((record) => record.kind === "note")} onSave={addRecord} onRemove={removeRecord} />
               )}
 
               {activePage === "goals" && (
@@ -709,11 +788,12 @@ export default function Home() {
               )}
             </motion.div>
           )}
-          <footer className="page-footer"><span>© 2026 MoneyPilot AI</span><span><i className="footer-status" /> Tus datos están guardados en este dispositivo</span><button onClick={exportBackup}>Hacer copia de seguridad</button></footer>
+          <footer className="page-footer"><span>© 2026 MoneyPilot AI</span><span><i className="footer-status" /> Tus datos se guardan en tu cuenta privada</span><button onClick={exportBackup}>Hacer copia de seguridad</button></footer>
         </div>
         <nav className="mobile-nav" aria-label="Navegación móvil">{navigation.slice(0, 5).map(({ key, label, icon: Icon }) => <button key={key} className={activePage === key ? "active" : ""} onClick={() => changePage(key)}><Icon size={19} /><span>{label}</span></button>)}</nav>
       </main>
       {dialogOpen && <RecordDialog key={editingRecord?.id ?? `new-${activePage}`} record={editingRecord} initialKind={addKindByPage[activePage] ?? "expense"} onClose={() => { setDialogOpen(false); setEditingRecord(null); }} onSave={addRecord} />}
+      {loanDialog && <LoanDialog key={loanDialog.loan?.id ?? "new-loan"} loan={loanDialog.loan} onClose={() => setLoanDialog(null)} onSave={addRecord} />}
       {notice && <div className="toast-message"><Check size={16} />{notice}</div>}
     </div>
   );

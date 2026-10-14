@@ -60,13 +60,13 @@ export function BalanceChart({ records, detailed = false }: { records: FinanceRe
             dataKey="month"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#737783", fontSize: 11 }}
+            tick={{ fill: "#737783", fontSize: 13 }}
             dy={10}
           />
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#737783", fontSize: 11 }}
+            tick={{ fill: "#737783", fontSize: 13 }}
             tickFormatter={money}
             width={54}
           />
@@ -76,7 +76,7 @@ export function BalanceChart({ records, detailed = false }: { records: FinanceRe
               border: "1px solid var(--chart-tooltip-border)",
               borderRadius: 12,
               color: "var(--chart-tooltip-text)",
-              fontSize: 12,
+              fontSize: 14,
               backdropFilter: "blur(14px)",
             }}
             formatter={(value) => [money(Number(value)), "Balance"]}

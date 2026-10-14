@@ -217,7 +217,7 @@ html[data-theme="light"] .optional-label { color: #94a3b8; }
 html[data-theme="light"] .toast-message { border-color: rgba(34, 197, 94, .3); background: rgba(236, 253, 245, .92); color: #0f6b46; backdrop-filter: blur(16px); box-shadow: 0 12px 32px rgba(31, 50, 100, .14); }
 html[data-theme="light"] .loading-orbit { border-color: rgba(15, 23, 42, .1); border-top-color: #3b82f6; }
 
-.chart-empty { display: grid; place-items: center; width: 100%; text-align: center; font-size: 13px; color: var(--muted); }
+.chart-empty { display: grid; place-items: center; width: 100%; text-align: center; font-size: 15px; color: var(--muted); }
 
 /* Logos de marca y estado de suscripciones */
 .brand-logo { display: inline-grid; flex: 0 0 auto; place-items: center; border-radius: 11px; color: #fff; background: var(--brand); box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 38%, transparent), inset 0 1px 0 rgba(255,255,255,.28); }
@@ -226,16 +226,16 @@ html[data-theme="light"] .loading-orbit { border-color: rgba(15, 23, 42, .1); bo
 .subscription-card.is-cancelled { opacity: .55; filter: grayscale(1); }
 .subscription-card.is-cancelled h3 { text-decoration: line-through; }
 .subscription-card.is-due { border-color: rgba(245,158,11,.6); box-shadow: 0 0 0 3px rgba(245,158,11,.12); }
-.status-badge { display: flex; width: fit-content; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 8px; border-radius: 999px; font-size: 9px; font-weight: 700; }
+.status-badge { display: flex; width: fit-content; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .status-badge.active { background: rgba(34,197,94,.14); color: #16a34a; }
 .status-badge.cancelled { background: rgba(148,163,184,.2); color: #64748b; }
 .status-badge.due { background: rgba(245,158,11,.18); color: #b45309; animation: duePulse 1.8s ease-in-out infinite; }
 @keyframes duePulse { 50% { box-shadow: 0 0 0 4px rgba(245,158,11,.15); } }
 .due-banner { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; padding: 14px 18px; border: 1px solid rgba(245,158,11,.4); border-radius: 18px; background: linear-gradient(105deg, rgba(245,158,11,.18), rgba(255,255,255,.06)); backdrop-filter: blur(22px); }
 .due-icon { display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; border-radius: 12px; background: rgba(245,158,11,.22); color: #d97706; }
-.due-list { display: flex; flex: 1; flex-direction: column; gap: 3px; font-size: 13px; }
+.due-list { display: flex; flex: 1; flex-direction: column; gap: 3px; font-size: 15px; }
 .due-banner .insight-action { white-space: nowrap; }
-.check-label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.check-label { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--muted); cursor: pointer; }
 .check-label input { width: 16px; height: 16px; accent-color: #3b82f6; }
 @media (max-width: 650px) { .due-banner { flex-wrap: wrap; } }
 
