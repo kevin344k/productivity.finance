@@ -105,7 +105,7 @@ function verifyPassword(password, stored) {
 // Limita intentos de autenticación por IP (ventana de 15 min).
 const attempts = new Map();
 function rateLimited(req) {
-  const ip = req.headers["cf-connecting-ip"] ?? req.socket.remoteAddress ?? "?";
+  const ip = req.headers["x-client-ip"] ?? req.headers["cf-connecting-ip"] ?? req.socket.remoteAddress ?? "?";
   const now = Date.now();
   const entry = attempts.get(ip) ?? { count: 0, reset: now + 15 * 60_000 };
   if (entry.reset < now) { entry.count = 0; entry.reset = now + 15 * 60_000; }

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ act
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const upstream = await callApi(`/auth/${action}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(forwarded ? { "CF-Connecting-IP": forwarded } : {}) },
+    headers: { "Content-Type": "application/json", ...(forwarded ? { "X-Client-IP": forwarded } : {}) },
     body: await req.text(),
   });
   const data = await upstream.json().catch(() => ({ error: "Respuesta inválida" }));
